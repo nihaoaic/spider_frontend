@@ -122,7 +122,9 @@ export default {
       .catch(err => {
         console.warn('initial /hosts fetch failed, trying direct backend fallback', err)
         // fallback to direct backend URL (useful during local dev if proxy isn't running)
-        return tryBackend('http://127.0.0.1:5000/hosts')
+        // 从环境变量获取后端API地址，如果没有则使用默认值
+        const fallbackAPI = import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5000'
+        return tryBackend(`${fallbackAPI}/hosts`)
       })
       .then(j => {
         if (j && j.hosts && Array.isArray(j.hosts) && j.hosts.length) {
@@ -182,17 +184,17 @@ export default {
     },
     toggleApi() {
       // Toggle to force direct backend on (sets to http://localhost:5000)
-      if (this.apiBase === 'http://127.0.0.1:5000') {
+      if (this.apiBase === (import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5000')) {
         this.apiBase = ''
       } else {
-        this.apiBase = 'http://127.0.0.1:5000'
+        this.apiBase = import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5000'
       }
       if (typeof window !== 'undefined') window.__API_BASE__ = this.apiBase
       
       // 当切换API时，直接设置主机为本地地址，而不尝试获取主机列表
-      if (this.apiBase === 'http://127.0.0.1:5000') {
-        this.hosts = ['http://127.0.0.1:5000'];
-        this.selectedHost = 'http://127.0.0.1:5000';
+      if (this.apiBase === (import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5000')) {
+        this.hosts = [this.apiBase];
+        this.selectedHost = this.apiBase;
         // 更新全局变量
         if (typeof window !== 'undefined') window.__SCRAPYD_SELECTED_HOST__ = this.selectedHost;
       } else {
@@ -217,7 +219,8 @@ export default {
         .catch(err => {
           console.warn('initial /hosts fetch failed, trying direct backend fallback', err)
           // fallback to direct backend URL (useful during local dev if proxy isn't running)
-          return tryBackend('http://127.0.0.1:5000/hosts')
+          const fallbackAPI = import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5000'
+          return tryBackend(`${fallbackAPI}/hosts`)
         })
         .then(j => {
           if (j && j.hosts && Array.isArray(j.hosts) && j.hosts.length) {
