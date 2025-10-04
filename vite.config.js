@@ -8,15 +8,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/redis': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true
       },
       '/hosts': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true
       },
       '/mongo': {
-        target: 'http://127.0.0.1:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true
       }
     }
