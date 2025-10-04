@@ -121,11 +121,14 @@ export default {
     tryBackend(API ? `${API}/hosts` : '/hosts')
       .catch(err => {
         console.warn('initial /hosts fetch failed, trying direct backend fallback', err)
-        // fallback to direct backend URL (useful during local dev if proxy isn't running)
-        // 从环境变量获取后端API地址，如果没有则使用默认值
-        const fallbackAPI = import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5001'
-        return tryBackend(`${fallbackAPI}/hosts`)
+        // fallback to proxy path to ensure consistency with other API calls
+        return tryBackend('/hosts')
       })
+
+    // fallback to direct backend URL (useful during local dev if proxy isn't running)
+    // 从环境变量获取后端API地址，如果没有则使用默认值
+    const fallbackAPI = import.meta.env.VITE_BACKEND_API || 'http://127.0.0.1:5001'
+    return tryBackend(`${fallbackAPI}/hosts`)
       .then(j => {
         if (j && j.hosts && Array.isArray(j.hosts) && j.hosts.length) {
           this.hosts = j.hosts;
