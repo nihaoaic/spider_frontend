@@ -1,0 +1,92 @@
+ /* small style overrides if needed */
+ /* Remove default browser margin/padding so layout is flush with viewport */
+body { background: #f5f7fa; margin: 0; padding: 0; }
+.el-header { background:#409EFF; color: #fff; }
+
+/* Remove white card background and borders for a flat look */
+.el-card {
+	background-color: transparent !important;
+	box-shadow: none !important;
+	border: none !important;
+}
+
+/* Ensure card body doesn't show a separate background */
+.el-card__body {
+	background: transparent !important;
+	padding: 0 !important;
+}
+
+/* Make main area slightly offset without white separators */
+body, .el-main {
+	background: #f5f7fa;
+}
+
+/* Tweak aside/menu visuals */
+.el-aside { border-right: none !important; }
+
+/* panel styling used in App.vue */
+.panel { background: transparent; padding: 18px 24px; border-radius: 6px; }
+
+/* form items spacing */
+.el-form {
+	background: transparent;
+}
+.el-form .el-form-item {
+	margin-bottom: 18px;
+}
+
+/* Standardize primary/action buttons across the app */
+.panel .el-button.action-btn,
+.el-upload .el-button.action-btn,
+.el-form .el-button.action-btn,
+.el-upload .el-button,
+.el-upload .el-button--default {
+	/* strong override to ensure consistent sizing across Element Plus button variants */
+	box-sizing: border-box !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	height: 36px !important;
+	min-height: 36px !important;
+	line-height: 20px !important; /* let flex center content */
+	padding: 0 14px !important;
+	font-size: 14px !important;
+}
+
+/* Make the upload controls align with the primary button */
+.upload-row { display: flex; align-items: center; gap: 12px; }
+.upload-row .el-upload { display: flex !important; align-items: center !important; }
+.upload-row .el-upload .el-button,
+.upload-row > .el-button {
+	box-sizing: border-box !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	height: 36px !important;
+	min-height: 36px !important;
+	padding: 0 14px !important;
+	margin: 0 !important;
+}
+.upload-row .el-button { min-width: 140px !important; }
+
+/* Drag-and-drop upload area styling */
+.upload-area {
+	flex: 1 1 420px;
+	max-width: 720px;
+}
+.upload-drag-content { text-align: center; padding: 18px; color: rgba(0,0,0,0.65); }
+.upload-drag-content .selected-file { color: #333; font-weight: 500; }
+.upload-actions { display: flex; gap: 12px; align-items: center; }
+
+/* show a visible border when dragging files over the upload area */
+.upload-drop-wrapper.is-dragover .upload-drag-content {
+	border: 2px dashed rgba(64,158,255,0.55);
+	border-radius: 6px;
+	background: rgba(64,158,255,0.04);
+}
+
+.upload-drop-wrapper { display: inline-block; }
+
+/* Small visual tweak for spacing under the form labels */
+.el-form-item .el-upload,
+.el-form-item .el-button { margin-top: 6px; }
