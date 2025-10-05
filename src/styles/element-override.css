@@ -1,38 +1,109 @@
- /* small style overrides if needed */
- /* Remove default browser margin/padding so layout is flush with viewport */
-body { background: #f5f7fa; margin: 0; padding: 0; }
-.el-header { background:#409EFF; color: #fff; }
-
-/* Remove white card background and borders for a flat look */
-.el-card {
-	background-color: transparent !important;
-	box-shadow: none !important;
-	border: none !important;
+/* 完全重置浏览器默认样式 */
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed,
+figure, figcaption, footer, header, hgroup,
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
 }
 
-/* Ensure card body doesn't show a separate background */
-.el-card__body {
-	background: transparent !important;
-	padding: 0 !important;
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure,
+footer, header, hgroup, menu, nav, section {
+  display: block;
 }
 
-/* Make main area slightly offset without white separators */
-body, .el-main {
-	background: #f5f7fa;
+body {
+  line-height: 1;
+  background: #f5f7fa;
+  height: 100%;
+  width: 100%;
+  min-height: 100vh;
 }
 
-/* Tweak aside/menu visuals */
-.el-aside { border-right: none !important; }
+ol, ul {
+  list-style: none;
+}
 
-/* panel styling used in App.vue */
-.panel { background: transparent; padding: 18px 24px; border-radius: 6px; }
+blockquote, q {
+  quotes: none;
+}
+
+blockquote:before, blockquote:after,
+q:before, q:after {
+  content: '';
+  content: none;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* 应用容器样式 */
+#app {
+  height: 100%;
+  width: 100%;
+  min-height: 100vh;
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #2c3e50;
+}
+
+/* Element Plus 组件样式覆盖 */
+.el-container {
+  height: 100%;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.el-header {
+  background: #f5f7fa;
+  color: #2c3e50;
+  margin: 0 !important;
+  padding: 12px 20px !important;
+}
+
+.el-aside {
+  background: #2d3a4b;
+  color: #fff;
+  margin: 0 !important;
+  padding: 12px !important;
+}
+
+.el-main {
+  background: #f5f7fa;
+  margin: 0 !important;
+  padding: 20px !important;
+}
+
+/* panel styling */
+.panel {
+  background: transparent;
+  padding: 18px;
+  border-radius: 6px;
+  margin: 0;
+}
 
 /* form items spacing */
-.el-form {
-	background: transparent;
-}
 .el-form .el-form-item {
-	margin-bottom: 18px;
+  margin-bottom: 18px;
 }
 
 /* Standardize primary/action buttons across the app */
@@ -41,52 +112,82 @@ body, .el-main {
 .el-form .el-button.action-btn,
 .el-upload .el-button,
 .el-upload .el-button--default {
-	/* strong override to ensure consistent sizing across Element Plus button variants */
-	box-sizing: border-box !important;
-	display: inline-flex !important;
-	align-items: center !important;
-	justify-content: center !important;
-	height: 36px !important;
-	min-height: 36px !important;
-	line-height: 20px !important; /* let flex center content */
-	padding: 0 14px !important;
-	font-size: 14px !important;
+  /* strong override to ensure consistent sizing across Element Plus button variants */
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  line-height: 20px !important; /* let flex center content */
+  padding: 0 14px !important;
+  font-size: 14px !important;
 }
 
 /* Make the upload controls align with the primary button */
-.upload-row { display: flex; align-items: center; gap: 12px; }
-.upload-row .el-upload { display: flex !important; align-items: center !important; }
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-row .el-upload {
+  display: flex !important;
+  align-items: center !important;
+}
+
 .upload-row .el-upload .el-button,
 .upload-row > .el-button {
-	box-sizing: border-box !important;
-	display: inline-flex !important;
-	align-items: center !important;
-	justify-content: center !important;
-	height: 36px !important;
-	min-height: 36px !important;
-	padding: 0 14px !important;
-	margin: 0 !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 14px !important;
+  margin: 0 !important;
 }
-.upload-row .el-button { min-width: 140px !important; }
+
+.upload-row .el-button {
+  min-width: 140px !important;
+}
 
 /* Drag-and-drop upload area styling */
 .upload-area {
-	flex: 1 1 420px;
-	max-width: 720px;
+  flex: 1 1 420px;
+  max-width: 720px;
 }
-.upload-drag-content { text-align: center; padding: 18px; color: rgba(0,0,0,0.65); }
-.upload-drag-content .selected-file { color: #333; font-weight: 500; }
-.upload-actions { display: flex; gap: 12px; align-items: center; }
+
+.upload-drag-content {
+  text-align: center;
+  padding: 18px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.upload-drag-content .selected-file {
+  color: #333;
+  font-weight: 500;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
 
 /* show a visible border when dragging files over the upload area */
 .upload-drop-wrapper.is-dragover .upload-drag-content {
-	border: 2px dashed rgba(64,158,255,0.55);
-	border-radius: 6px;
-	background: rgba(64,158,255,0.04);
+  border: 2px dashed rgba(64, 158, 255, 0.55);
+  border-radius: 6px;
+  background: rgba(64, 158, 255, 0.04);
 }
 
-.upload-drop-wrapper { display: inline-block; }
+.upload-drop-wrapper {
+  display: inline-block;
+}
 
 /* Small visual tweak for spacing under the form labels */
 .el-form-item .el-upload,
-.el-form-item .el-button { margin-top: 6px; }
+.el-form-item .el-button {
+  margin-top: 6px;
+}
