@@ -86,7 +86,7 @@ export default {
       if (!this.taskId) return
       
       // 使用统一的API地址处理方式
-      const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       const url = API ? `${API}/tasks/${this.taskId}` : `/tasks/${this.taskId}`
 
       fetch(url)

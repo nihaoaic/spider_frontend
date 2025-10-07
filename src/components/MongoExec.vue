@@ -28,7 +28,7 @@ export default {
       if (!this.script) { this.error = '请输入脚本名'; return }
       this.loading = true
       try {
-        const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+        const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
         const res = await fetch(API ? `${API}/mongo/exec` : '/mongo/exec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

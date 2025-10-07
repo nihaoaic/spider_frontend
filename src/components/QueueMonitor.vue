@@ -71,7 +71,7 @@ export default {
   computed: {
     socketUrl() {
       // 构建WebSocket URL
-      const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       if (API) {
         // 将http/https替换为ws/wss
         return API.replace(/^http/, 'ws')

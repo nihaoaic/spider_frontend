@@ -58,7 +58,7 @@ export default {
       this.error = null
       this.loading = true
       try {
-        const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+        const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
         const res = await fetch(
           `${API ? `${API}/mongo/results` : '/mongo/results'}?page=${this.currentPage}&page_size=${this.pageSize}`
         )
@@ -86,7 +86,7 @@ export default {
       this.loadFiles()
     },
     downloadFile(filename) {
-      const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       const url = API ? `${API}/mongo/results/${filename}` : `/mongo/results/${filename}`
       // 创建一个隐藏的下载链接并触发下载
       const link = document.createElement('a')

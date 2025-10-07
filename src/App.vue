@@ -5,26 +5,38 @@
         <div style="width:36px; height:36px; background:#409EFF; border-radius:6px"></div>
         <div style="font-size:18px; font-weight:600">数据管理</div>
       </div>
-      <el-menu default-active="redis" class="el-menu-vertical-demo" @select="onSelect" :background-color="'#2d3a4b'" :text-color="'#fff'" :active-text-color="'#ffd04b'">
+      <el-menu default-active="redis" class="el-menu-vertical-demo" @select="onSelect" background-color="#2d3a4b" text-color="#fff" active-text-color="#ffd04b" :collapse="false">
         <el-menu-item index="redis">Redis 推送</el-menu-item>
         <el-menu-item index="mongo">Mongo 脚本</el-menu-item>
         <el-menu-item index="files">文件</el-menu-item>
         <el-menu-item index="tasks">查询任务</el-menu-item>
+        <!-- 修改为多级菜单 -->
+        <el-sub-menu index="spider">
+          <template #title>
+            <el-icon><Menu /></el-icon>
+            <span>爬虫</span>
+          </template>
+          <el-menu-item index="spider-projects">项目</el-menu-item>
+          <el-menu-item index="spider-jobs">Jobs</el-menu-item>
+          <el-menu-item index="silk-logs">名单日志</el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 
     <el-container>
-      <el-header style="background:#f5f7fa; padding:12px 20px; display:flex; align-items:center; justify-content:space-between;">
-        <div style="font-size:16px">{{ currentTitle }}</div>
-        <div style="display:flex; align-items:center; gap:12px">
-          <div v-if="hosts.length" style="display:flex; align-items:center; gap:8px">
-            <span style="color:#7f8c8d">Hosts:</span>
+      <el-header style="text-align: right; font-size: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee;">
+        <div>
+          <h2 style="margin: 0; color: #333;">{{ currentTitle }}</h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 20px;">
+          <div v-if="hosts.length > 0" style="display: flex; align-items: center; gap: 10px;">
+            <span style="color: #666;">主机:</span>
             <el-select 
               v-model="selectedHost" 
-              @change="onSelectHost" 
-              placeholder="请选择主机"
-              style="width: 200px"
-            >
+              placeholder="选择主机" 
+              size="small" 
+              @change="onSelectHost"
+              style="width: 200px;">
               <el-option
                 v-for="host in hosts"
                 :key="host"
@@ -40,7 +52,8 @@
           </div>
         </div>
       </el-header>
-      <el-main style="padding:20px">
+      
+      <el-main style="padding:20px; background-color: #f5f5f5;">
         <!-- Redis 推送模块 -->
         <div v-show="active === 'redis'">
           <div class="panel">
@@ -62,10 +75,31 @@
           </div>
         </div>
         
-        <!-- 查询任务模块 -->
+        <!-- 任务查询模块 -->
         <div v-show="active === 'tasks'">
           <div class="panel">
             <TaskList :api-host="selectedHost" />
+          </div>
+        </div>
+        
+        <!-- 爬虫项目模块 -->
+        <div v-show="active === 'spider-projects'">
+          <div class="panel">
+            <SpiderManager :api-host="selectedHost" />
+          </div>
+        </div>
+        
+        <!-- 爬虫Jobs模块 -->
+        <div v-show="active === 'spider-jobs'">
+          <div class="panel">
+            <SpiderJobsViewer :api-host="selectedHost" />
+          </div>
+        </div>
+        
+        <!-- 爬虫日志模块 -->
+        <div v-show="active === 'silk-logs'">
+          <div class="panel">
+            <SilkLogs :api-host="selectedHost" />
           </div>
         </div>
       </el-main>
@@ -78,9 +112,17 @@ import RedisPush from './components/RedisPush.vue'
 import MongoExec from './components/MongoExec.vue'
 import FileList from './components/FileList.vue'
 import TaskList from './components/TaskList.vue'
+// 导入爬虫管理组件
+import SpiderManager from './components/SpiderManager.vue'
+// 导入新的爬虫Jobs和日志组件（需要后续创建）
+import SpiderJobsViewer from './components/SpiderJobsViewer.vue'
+import SilkLogs from './components/SilkLogs.vue'
 
-export default {
-  components: { RedisPush, MongoExec, FileList, TaskList },
+import { Menu } from '@element-plus/icons-vue'
+import { defineComponent } from 'vue'
+
+export default defineComponent({
+  components: { RedisPush, MongoExec, FileList, TaskList, SpiderManager, SpiderJobsViewer, SilkLogs, Menu },
   data() {
     return {
       active: 'redis',
@@ -141,6 +183,9 @@ export default {
         case 'mongo': return 'Mongo 脚本执行'
         case 'files': return '文件列表'
         case 'tasks': return '查询任务'
+        case 'spider-projects': return '爬虫项目'
+        case 'spider-jobs': return '爬虫任务'
+        case 'silk-logs': return '名单日志'
         default: return ''
       }
     }
@@ -168,7 +213,7 @@ export default {
       if (typeof window !== 'undefined') window.__API_BASE__ = this.apiBase
     }
   }
-}
+})
 </script>
 
 <style>

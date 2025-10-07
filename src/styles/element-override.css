@@ -191,3 +191,56 @@ table {
 .el-form-item .el-button {
   margin-top: 6px;
 }
+
+/* 修复el-table宽度问题 */
+.el-table {
+  width: 100% !important;
+}
+
+.el-table__body-wrapper,
+.el-table__header-wrapper {
+  width: 100% !important;
+}
+
+/* 修复滚动容器宽度问题 - 强制覆盖任何固定宽度 */
+.el-scrollbar__view {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: block !important;
+  min-width: auto !important;
+}
+
+/* 特别针对表格中的滚动容器 */
+.el-table .el-scrollbar__view {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: unset !important;
+}
+
+/* 确保表格单元格正确显示 */
+.el-table th,
+.el-table td {
+  box-sizing: border-box;
+}
+
+/* 修复展开行中的表格宽度 */
+.el-table__expanded-cell .el-table {
+  width: 100% !important;
+  margin-left: 0 !important;
+}
+
+/* 确保展开行内容占满宽度 */
+.el-table__expanded-cell {
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+.el-table__expanded-cell > * {
+  width: 100% !important;
+}
+
+/* 针对特定的598px问题 */
+.el-scrollbar__view[style*="width: 598px"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}

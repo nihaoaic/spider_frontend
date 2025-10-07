@@ -255,7 +255,7 @@ export default {
       this.loading = true
       
       // 使用统一的API地址处理方式
-      const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       const url = `${API ? `${API}/tasks` : '/tasks'}?page=${this.currentPage}&page_size=${this.pageSize}`
       
       // 从后端API获取任务列表
@@ -337,7 +337,7 @@ export default {
       }
       
       // 使用统一的API地址处理方式
-      const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       const url = API ? `${API}/tasks/${taskId}` : `/tasks/${taskId}`
       
       // 从后端API获取任务详情
@@ -399,7 +399,7 @@ export default {
       }
       
       // 使用统一的API地址处理方式
-      const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       const url = API ? `${API}/redis/queue/${tableName}` : `/redis/queue/${tableName}`
       
       fetch(url)
@@ -516,7 +516,7 @@ export default {
       
       try {
         // 构建WebSocket URL
-        const API = this.apiHost || (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
+        const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
         let socketUrl = ''
         
         if (API) {

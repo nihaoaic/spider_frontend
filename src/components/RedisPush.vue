@@ -80,7 +80,7 @@ export default {
   },
   computed: {
     apiUrl() {
-      let base = this.apiHost || (typeof window !== 'undefined' ? window.__API_BASE__ : '') || ''
+      let base = typeof window !== 'undefined' ? window.__API_BASE__ : '' || import.meta.env.VITE_API || ''
       
       if (!base) {
         if (import.meta.env.DEV) {
