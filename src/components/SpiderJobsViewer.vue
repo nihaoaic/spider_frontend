@@ -3,7 +3,7 @@
     <el-card>
       <div slot="header">
         <span>爬虫任务管理</span>
-        <el-button style="float: right; padding: 3px 0" type="text" @click="refreshJobs">刷新任务</el-button>
+        <el-button style="float: right; padding: 3px 0" type="text" @click="refreshAll">刷新任务</el-button>
       </div>
       
       <!-- 项目选择 -->
@@ -312,6 +312,10 @@ export default {
           this.projects = []
           this.loading = false
         })
+    },
+    refreshAll() {
+      this.refreshProjects()
+      // refreshProjects成功后会自动调用refreshJobs
     },
     
     refreshJobs() {
