@@ -300,6 +300,8 @@ export default {
             if (this.projects.length > 0 && !this.selectedProject) {
               this.selectedProject = this.projects[0]
               this.refreshJobs()
+            }else if(this.projects.length > 0 && this.selectedProject){
+              this.refreshJobs()
             }
           } else {
             this.$message.error(data.message || '获取项目列表失败')
