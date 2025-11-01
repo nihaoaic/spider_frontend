@@ -102,7 +102,7 @@
                 <template #default="{ row }">
                   <el-button 
                     size="mini" 
-                    type="primary" 
+                    type="text" 
                     @click="openParser(row)"
                   >
                     解析
@@ -172,7 +172,7 @@
                 <template #default="{ row }">
                   <el-button 
                     size="mini" 
-                    type="primary" 
+                    type="text" 
                     @click="openParser(row)"
                   >
                     解析
