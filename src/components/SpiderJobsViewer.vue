@@ -39,6 +39,18 @@
                   </el-button>
                 </template>
               </el-table-column>
+              <!-- 新增解析列 -->
+              <el-table-column label="解析" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button 
+                    size="mini" 
+                    type="primary" 
+                    @click="openParser(row)"
+                  >
+                    解析
+                  </el-button>
+                </template>
+              </el-table-column>
               <el-table-column prop="start_time" label="开始时间"></el-table-column>
               <el-table-column prop="update_time" label="更新时间"></el-table-column>
               <!-- Link列 -->
@@ -82,6 +94,18 @@
                     @click="viewSilkList(row)"
                   >
                     查看名单
+                  </el-button>
+                </template>
+              </el-table-column>
+              <!-- 新增解析列 -->
+              <el-table-column label="解析" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button 
+                    size="mini" 
+                    type="primary" 
+                    @click="openParser(row)"
+                  >
+                    解析
                   </el-button>
                 </template>
               </el-table-column>
@@ -140,6 +164,18 @@
                     @click="viewSilkList(row)"
                   >
                     查看名单
+                  </el-button>
+                </template>
+              </el-table-column>
+              <!-- 新增解析列 -->
+              <el-table-column label="解析" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button 
+                    size="mini" 
+                    type="primary" 
+                    @click="openParser(row)"
+                  >
+                    解析
                   </el-button>
                 </template>
               </el-table-column>
@@ -365,6 +401,16 @@ export default {
     
     handleTabClick(tab) {
       // 可以在这里添加切换标签页时的逻辑
+    },
+    
+    // 新增方法：打开解析页面
+    openParser(job) {
+      if (job.spider) {
+        const parserUrl = `http://68.64.178.162:3000/parser/?id=${encodeURIComponent(job.spider)}`
+        window.open(parserUrl, '_blank')
+      } else {
+        this.$message.warning('该任务没有爬虫信息')
+      }
     },
     
     // 新增方法：打开日志链接
