@@ -294,6 +294,11 @@ export default {
       default: ''
     }
   },
+  computed: {
+    $fetch() {
+      return (typeof window !== 'undefined' && window.__authFetch__) || fetch
+    }
+  },
   data() {
     return {
       projects: [],
@@ -441,9 +446,7 @@ export default {
           `/scrapyd/projects/${this.selectedProject}/jobs/${job.id}`
         const url = this.apiHost ? `${baseUrl}?host=${encodeURIComponent(this.apiHost)}` : baseUrl
         
-        fetch(url, {
-          method: 'DELETE'
-        })
+        this.$fetch(url, { method: 'DELETE' })
         .then(response => {
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
@@ -486,14 +489,10 @@ export default {
           `/scrapyd/projects/${this.selectedProject}/spiders/${job.spider}/run`
         const url = this.apiHost ? `${baseUrl}?host=${encodeURIComponent(this.apiHost)}` : baseUrl
         
-        fetch(url, {
+        this.$fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            jobid: job.id
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobid: job.id })
         })
         .then(response => {
           if (!response.ok) {

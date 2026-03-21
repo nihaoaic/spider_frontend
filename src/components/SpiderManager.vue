@@ -116,6 +116,12 @@ export default {
       default: ''
     }
   },
+  // 使用 window.__authFetch__ 发起带 Token 的请求，兜底为普通 fetch
+  computed: {
+    $fetch() {
+      return (typeof window !== 'undefined' && window.__authFetch__) || fetch
+    }
+  },
   data() {
     return {
       projects: [],
@@ -382,9 +388,7 @@ export default {
       const scrapydHost = typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__ || ''
       const url = scrapydHost ? `${baseUrl}?host=${encodeURIComponent(scrapydHost)}` : baseUrl
       
-      fetch(url, {
-        method: 'DELETE'
-      })
+      this.$fetch(url, { method: 'DELETE' })
         .then(response => {
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
@@ -427,9 +431,7 @@ export default {
       const scrapydHost = typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__ || ''
       const url = scrapydHost ? `${baseUrl}?host=${encodeURIComponent(scrapydHost)}` : baseUrl
       
-      fetch(url, {
-        method: 'DELETE'
-      })
+      this.$fetch(url, { method: 'DELETE' })
         .then(response => {
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
@@ -467,15 +469,12 @@ export default {
         background: 'rgba(0, 0, 0, 0.7)'
       });
       
-      fetch(url, {
+      this.$fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({}) // 发送空的JSON对象
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
       })
         .then(response => {
-          // 关闭加载提示
           loading.close();
           
           if (!response.ok) {
