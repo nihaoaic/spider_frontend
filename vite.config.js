@@ -9,12 +9,14 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
+    host: '0.0.0.0',   // 允许外部访问
     proxy: {
       '/auth':    proxyTarget,
       '/redis':   proxyTarget,
       '/hosts':   proxyTarget,
       '/mongo':   proxyTarget,
       '/tasks':   proxyTarget,
+      '/stats':   proxyTarget,
       '/scrapyd': proxyTarget,
       '/socket.io': { ...proxyTarget, ws: true },
     }
