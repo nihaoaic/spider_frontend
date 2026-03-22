@@ -18,6 +18,8 @@ export default defineConfig({
       '/tasks':   proxyTarget,
       '/stats':   proxyTarget,
       '/scrapyd': proxyTarget,
+      '/pull_spider': proxyTarget,
+      '/deploy': proxyTarget,
       '/socket.io': { ...proxyTarget, ws: true },
     }
   }
