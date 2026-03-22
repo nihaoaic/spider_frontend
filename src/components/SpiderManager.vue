@@ -4,8 +4,8 @@
       <div slot="header" class="clearfix">
         <span style="font-size: 18px; font-weight: bold;">爬虫项目管理</span>
         <span style="float: right;">
-          <el-button style="margin-right: 8px;" type="success" @click="pullSpiderDeploy" :loading="pullDeployLoading">
-            Git 拉取并部署
+          <el-button style="margin-right: 8px;" type="success" @click="batchScrapydDeploy" :loading="deployLoading">
+            批量 scrapyd-deploy
           </el-button>
           <el-button style="padding: 8px 16px;" type="primary" @click="refreshProjects" :loading="loading">
             <i class="el-icon-refresh"></i> 刷新项目
@@ -132,7 +132,7 @@ export default {
     return {
       projects: [],
       loading: false,
-      pullDeployLoading: false,
+      deployLoading: false,
       jobsDialogVisible: false,
       selectedSpider: '',
       selectedProjectName: '',
@@ -184,17 +184,17 @@ export default {
         })
     },
 
-    /** 调用后端：git pull + 按 SCRAPYD_DEPLOY_TARGETS 批量 scrapyd-deploy */
-    pullSpiderDeploy() {
+    /** 按服务端配置依次 scrapyd-deploy（无 git pull） */
+    batchScrapydDeploy() {
       this.$confirm(
-        '将在服务器上对配置的爬虫仓库执行 git pull，并部署到 .env 中 SCRAPYD_DEPLOY_TARGETS 所列的全部 worker，是否继续？',
-        'Git 拉取并部署',
+        '将在服务器上对 SCRAPYD_DEPLOY_WORKDIR 依次执行 scrapyd-deploy（各 target 见 .env 中 SCRAPYD_DEPLOY_TARGETS），不包含 git pull。是否继续？',
+        '批量 scrapyd-deploy',
         { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' }
       ).then(() => {
-        this.pullDeployLoading = true
+        this.deployLoading = true
         const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
-        const url = API ? `${API}/pull_spider` : '/pull_spider'
-        this.$fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        const url = API ? `${API}/deploy/scrapyd` : '/deploy/scrapyd'
+        this.$fetch(url, { method: 'GET' })
           .then(async r => {
             let data = {}
             try {
@@ -206,13 +206,11 @@ export default {
             if (data.status === 'success') {
               const t = (data.targets || []).length
               this.$message.success(
-                t
-                  ? `已 git pull 并部署到 ${t} 个 target：${data.targets.join(', ')}`
-                  : (data.message || '操作成功')
+                t ? `已部署到 ${t} 个 target：${data.targets.join(', ')}` : '操作成功'
               )
               this.refreshProjects()
             } else if (data.status === 'partial_success') {
-              this.$message.warning((data.errors || []).join('; ') || '部分部署失败')
+              this.$message.warning((data.errors || []).join('; ') || '部分 target 部署失败')
               ElMessageBox.alert(
                 `<pre style="max-height:320px;overflow:auto;text-align:left;font-size:12px;">${this._escapeHtml(JSON.stringify(data, null, 2))}</pre>`,
                 '部署详情',
@@ -224,7 +222,7 @@ export default {
             }
           })
           .catch(e => this.$message.error(e.message || '请求失败'))
-          .finally(() => { this.pullDeployLoading = false })
+          .finally(() => { this.deployLoading = false })
       }).catch(() => {})
     },
 
