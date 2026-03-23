@@ -5,7 +5,7 @@
         <span style="font-size: 18px; font-weight: bold;">爬虫项目管理</span>
         <span style="float: right;">
           <el-button style="margin-right: 8px;" type="success" @click="batchScrapydDeploy" :loading="deployLoading">
-            批量 scrapyd-deploy
+            拉取并批量部署
           </el-button>
           <el-button style="padding: 8px 16px;" type="primary" @click="refreshProjects" :loading="loading">
             <i class="el-icon-refresh"></i> 刷新项目
@@ -184,16 +184,16 @@ export default {
         })
     },
 
-    /** 按服务端配置依次 scrapyd-deploy（无 git pull） */
+    /** 一键：git pull（若配置 PULL_SPIDER_REPO_PATH）+ 批量 scrapyd-deploy */
     batchScrapydDeploy() {
       this.$confirm(
-        '将在服务器上对 SCRAPYD_DEPLOY_WORKDIR 依次执行 scrapyd-deploy（各 target 见 .env 中 SCRAPYD_DEPLOY_TARGETS），不包含 git pull。是否继续？',
-        '批量 scrapyd-deploy',
+        '将在服务器上按 .env 执行：若配置了 PULL_SPIDER_REPO_PATH 则先 git pull，再在 SCRAPYD_DEPLOY_WORKDIR 下对各 target 执行 scrapyd-deploy（shell 模式）。是否继续？',
+        '拉取并批量部署',
         { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' }
       ).then(() => {
         this.deployLoading = true
         const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
-        const url = API ? `${API}/deploy/scrapyd` : '/deploy/scrapyd'
+        const url = API ? `${API}/deploy/pull_and_scrapyd` : '/deploy/pull_and_scrapyd'
         this.$fetch(url, { method: 'GET' })
           .then(async r => {
             let data = {}
@@ -204,10 +204,14 @@ export default {
           })
           .then(({ status, data }) => {
             if (data.status === 'success') {
-              const t = (data.targets || []).length
-              this.$message.success(
-                t ? `已部署到 ${t} 个 target：${data.targets.join(', ')}` : '操作成功'
-              )
+              const parts = []
+              if (data.git && data.git.ok === true) parts.push('Git 已拉取')
+              if (data.git && data.git.skipped) parts.push('未配置拉取，已跳过')
+              if (data.targets && data.targets.length) {
+                parts.push(`已部署: ${data.targets.join(', ')}`)
+              }
+              if (data.deploy && data.deploy.skipped) parts.push('未配置部署，已跳过')
+              this.$message.success(parts.length ? parts.join('；') : '操作成功')
               this.refreshProjects()
             } else if (data.status === 'partial_success') {
               this.$message.warning((data.errors || []).join('; ') || '部分 target 部署失败')
