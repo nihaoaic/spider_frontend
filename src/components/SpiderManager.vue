@@ -33,12 +33,36 @@
               Delete Project
             </el-button>
 
+            <!-- 版本批量操作 -->
+            <div
+              v-if="project.versions && project.versions.length > 0"
+              style="margin: 8px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;"
+            >
+              <el-button
+                type="danger"
+                size="small"
+                :disabled="selectedVersionCount(project) === 0"
+                @click="batchDeleteSelectedVersions(project)"
+              >
+                批量删除选中版本
+              </el-button>
+              <el-button type="warning" size="small" @click="pruneKeepLatest(project)">
+                仅保留最新版本
+              </el-button>
+              <span v-if="selectedVersionCount(project) > 0" style="color: #909399; font-size: 12px;">
+                已选 {{ selectedVersionCount(project) }} 个版本
+              </span>
+            </div>
+
             <!-- 添加版本表格 -->
             <el-table
               :data="project.versions"
+              row-key="version"
               style="width: 100%; margin-top: 15px;"
               v-if="project.versions && project.versions.length > 0"
+              @selection-change="(rows) => onVersionSelectionChange(project.name, rows)"
             >
+              <el-table-column type="selection" width="48" />
               <el-table-column prop="version" label="Version" width="250">
                 <template #default="{ row }">
                   <i class="el-icon-document" style="margin-right:5px;"></i>
@@ -77,18 +101,6 @@
                   <div v-else>
                     <el-tag size="mini" type="info">No spiders available</el-tag>
                   </div>
-                </template>
-              </el-table-column>
-              
-              <el-table-column label="Actions" width="150" align="center">
-                <template #default="{ row }">
-                  <el-button
-                    type="danger"
-                    size="mini"
-                    @click="deleteVersion(project.name, row.version)"
-                  >
-                    Delete Version
-                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -136,7 +148,9 @@ export default {
       jobsDialogVisible: false,
       selectedSpider: '',
       selectedProjectName: '',
-      expandedRows: [] // 记录展开的行
+      expandedRows: [], // 记录展开的行
+      /** 各项目版本表格当前勾选行 { [projectName]: row[] } */
+      versionSelectionByProject: {}
     }
   },
   mounted() {
@@ -164,6 +178,7 @@ export default {
             // 修复：根据后端实际返回结构解析项目列表数据
             const projectNames = data.data.projects || []
             // 初始化项目数据
+            this.versionSelectionByProject = {}
             this.projects = projectNames.map(name => ({ 
               name,
               versionCount: 0,
@@ -211,6 +226,15 @@ export default {
                 parts.push(`已部署: ${data.targets.join(', ')}`)
               }
               if (data.deploy && data.deploy.skipped) parts.push('未配置部署，已跳过')
+              if (data.prune && typeof data.prune === 'object') {
+                const lines = Object.entries(data.prune).map(([h, p]) => {
+                  if (p && p.error) return `${h}: ${p.error}`
+                  const nDel = (p && p.deleted && p.deleted.length) || 0
+                  const kept = (p && p.kept && p.kept.join(',')) || ''
+                  return `${h}: 保留 [${kept}]，已删 ${nDel} 个旧版本`
+                })
+                if (lines.length) parts.push('版本清理: ' + lines.join('；'))
+              }
               this.$message.success(parts.length ? parts.join('；') : '操作成功')
               this.refreshProjects()
             } else if (data.status === 'partial_success') {
@@ -236,6 +260,125 @@ export default {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
+    },
+
+    selectedVersionCount(project) {
+      return (this.versionSelectionByProject[project.name] || []).length
+    },
+
+    onVersionSelectionChange(projectName, rows) {
+      this.versionSelectionByProject = { ...this.versionSelectionByProject, [projectName]: rows || [] }
+    },
+
+    batchDeleteSelectedVersions(project) {
+      const rows = this.versionSelectionByProject[project.name] || []
+      if (!rows.length) {
+        this.$message.warning('请先勾选要删除的版本')
+        return
+      }
+      const versions = rows.map((r) => r.version)
+      this.$confirm(
+        `确定批量删除以下 ${versions.length} 个版本？不可恢复：\n${versions.join(', ')}`,
+        '批量删除版本',
+        { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' }
+      )
+        .then(() => this.performBatchDeleteVersions(project.name, versions))
+        .then(() => {
+          this.versionSelectionByProject = { ...this.versionSelectionByProject, [project.name]: [] }
+          this.loadProjectDetails(project)
+        })
+        .catch((e) => {
+          if (e === 'cancel') return
+          this.$message.error(e && e.message ? e.message : '批量删除失败')
+        })
+    },
+
+    pruneKeepLatest(project) {
+      this.$confirm(
+        '将删除除「最新」以外的所有历史版本（按版本号排序保留 1 个），是否继续？',
+        '仅保留最新版本',
+        { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' }
+      )
+        .then(() => this.performPruneVersions(project.name, 1))
+        .then(() => {
+          this.versionSelectionByProject = { ...this.versionSelectionByProject, [project.name]: [] }
+          this.loadProjectDetails(project)
+        })
+        .catch((e) => {
+          if (e === 'cancel') return
+          this.$message.error(e && e.message ? e.message : '清理版本失败')
+        })
+    },
+
+    performBatchDeleteVersions(projectName, versions) {
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
+      const enc = encodeURIComponent(projectName)
+      const baseUrl = API
+        ? `${API}/scrapyd/projects/${enc}/versions/batch_delete`
+        : `/scrapyd/projects/${enc}/versions/batch_delete`
+      const scrapydHost = typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__ || ''
+      const url = scrapydHost ? `${baseUrl}?host=${encodeURIComponent(scrapydHost)}` : baseUrl
+
+      return this.$fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ versions })
+      })
+        .then(async (response) => {
+          let data = {}
+          try {
+            data = await response.json()
+          } catch (_) {}
+          const failed = (data.results || []).filter((r) => !r.ok)
+          if (data.status === 'success') {
+            this.$message.success(`已删除 ${versions.length} 个版本`)
+            return
+          }
+          if (data.status === 'partial_success' && failed.length) {
+            this.$message.warning(
+              `部分失败：${failed.map((f) => `${f.version}: ${f.error || '?'}`).join('; ')}`
+            )
+            return
+          }
+          if (data.status === 'error' || !response.ok) {
+            throw new Error(data.message || `HTTP ${response.status}`)
+          }
+        })
+    },
+
+    performPruneVersions(projectName, keep = 1) {
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
+      const enc = encodeURIComponent(projectName)
+      const baseUrl = API
+        ? `${API}/scrapyd/projects/${enc}/versions/prune`
+        : `/scrapyd/projects/${enc}/versions/prune`
+      const scrapydHost = typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__ || ''
+      const url = scrapydHost ? `${baseUrl}?host=${encodeURIComponent(scrapydHost)}` : baseUrl
+
+      return this.$fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keep })
+      })
+        .then(async (response) => {
+          let data = {}
+          try {
+            data = await response.json()
+          } catch (_) {}
+          if (data.status === 'success') {
+            const n = (data.deleted && data.deleted.length) || 0
+            this.$message.success(n ? `已清理，删除 ${n} 个旧版本` : '当前无需清理')
+            return
+          }
+          if (data.status === 'partial_success') {
+            const errs = data.errors || []
+            this.$message.warning(errs.length ? errs.join('; ') : '部分清理失败')
+            return
+          }
+          if (data.status === 'error' || !response.ok) {
+            throw new Error(data.message || `HTTP ${response.status}`)
+          }
+        })
     },
 
     // 处理展开行变化
@@ -467,49 +610,6 @@ export default {
         })
         .catch(error => {
           this.$message.error('删除项目失败: ' + error.message)
-        })
-    },
-    
-    // 删除版本
-    deleteVersion(projectName, version) {
-      this.$confirm(`确定要删除版本 ${version} 吗？此操作不可恢复。`, '删除版本', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(() => {
-        this.performDeleteVersion(projectName, version)
-      }).catch(() => {
-        // 用户取消删除
-      })
-    },
-    
-    // 执行删除版本操作
-    performDeleteVersion(projectName, version) {
-      // 修复：使用window.__API_BASE__作为API基础地址
-      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
-      const baseUrl = API ? `${API}/scrapyd/projects/${projectName}/versions/${version}` : `/scrapyd/projects/${projectName}/versions/${version}`
-      // 传递主机参数给后端API
-      const scrapydHost = typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__ || ''
-      const url = scrapydHost ? `${baseUrl}?host=${encodeURIComponent(scrapydHost)}` : baseUrl
-      
-      this.$fetch(url, { method: 'DELETE' })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`)
-          }
-          return response.json()
-        })
-        .then(data => {
-          if (data.status === 'success') {
-            this.$message.success(`版本 ${version} 删除成功`)
-            // 重新加载项目信息
-            this.refreshProjects()
-          } else {
-            this.$message.error(data.message || '删除版本失败')
-          }
-        })
-        .catch(error => {
-          this.$message.error('删除版本失败: ' + error.message)
         })
     },
     
