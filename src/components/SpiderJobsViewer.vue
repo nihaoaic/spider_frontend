@@ -62,7 +62,7 @@
                     @click="openLog(row)"
                     :disabled="!row.log_url"
                   >
-                    Log
+                    实时日志
                   </el-button>
                 </template>
               </el-table-column>
@@ -132,7 +132,7 @@
                     @click="openLog(row)"
                     :disabled="!row.log_url"
                   >
-                    Log
+                    实时日志
                   </el-button>
                 </template>
               </el-table-column>
@@ -180,7 +180,7 @@
               <!-- Log列 -->
               <el-table-column label="日志" width="80" align="center">
                 <template #default="{ row }">
-                  <el-button size="mini" type="primary" @click="openLog(row)" :disabled="!row.log_url">Log</el-button>
+                  <el-button size="mini" type="primary" @click="openLog(row)" :disabled="!row.log_url">实时日志</el-button>
                 </template>
               </el-table-column>
               <!-- 日志分析列 -->
@@ -329,11 +329,33 @@
         <el-button type="primary" @click="analyzeJobLog(logAnalysisJob)" :loading="logAnalysisLoading">刷新</el-button>
       </template>
     </el-dialog>
+
+    <!-- 实时日志（WebSocket 增量，不整文件打开新窗口） -->
+    <el-dialog
+      :title="jobLogTitle"
+      v-model="jobLogDialogVisible"
+      width="82%"
+      top="4vh"
+      destroy-on-close
+      @close="onJobLogDialogClose"
+    >
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+        <el-tag v-if="jobLogConnected" type="success" size="small">已连接 · 服务端轮询增量推送</el-tag>
+        <el-tag v-else type="info" size="small">连接中…</el-tag>
+        <el-button size="small" @click="clearJobLogText">清空显示</el-button>
+        <span v-if="jobLogTruncatedHint" style="color:#909399;font-size:12px;">{{ jobLogTruncatedHint }}</span>
+      </div>
+      <pre ref="jobLogPre" class="job-log-pre">{{ jobLogText }}</pre>
+      <template #footer>
+        <el-button type="primary" @click="jobLogDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import { io } from 'socket.io-client'
+import { getToken } from '../utils/auth.js'
 
 export default {
   name: 'SpiderJobsViewer',
@@ -346,6 +368,12 @@ export default {
   computed: {
     $fetch() {
       return (typeof window !== 'undefined' && window.__authFetch__) || fetch
+    },
+    jobLogTitle() {
+      if (!this.currentLogJob) return '任务日志'
+      const s = this.currentLogJob.spider || ''
+      const id = this.currentLogJob.id || ''
+      return `实时日志 — ${s} (${id})`
     }
   },
   data() {
@@ -369,7 +397,14 @@ export default {
       logAnalysisVisible: false,
       logAnalysisLoading: false,
       logAnalysisData: null,
-      logAnalysisJob: null
+      logAnalysisJob: null,
+      // 实时日志 WebSocket
+      jobLogDialogVisible: false,
+      jobLogText: '',
+      jobLogSocket: null,
+      jobLogConnected: false,
+      jobLogTruncatedHint: '',
+      currentLogJob: null
     }
   },
   mounted() {
@@ -472,16 +507,138 @@ export default {
       }
     },
     
-    // 新增方法：打开日志链接
-    openLog(job) {
-      if (job.log_url) {
-        // 构造完整的日志URL
-        const logUrl = this.scrapydHost ? `${this.scrapydHost}${job.log_url}` : job.log_url
-        // 在新窗口中打开日志链接
-        window.open(logUrl, '_blank')
-      } else {
-        this.$message.warning('该任务没有可用的日志链接')
+    resolveSocketBaseUrl() {
+      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
+      return API || 'http://127.0.0.1:5001'
+    },
+
+    parseLogJobMeta(job) {
+      const parts = (job.log_url || '').split('/')
+      const i = parts.findIndex((p) => p === 'logs')
+      if (i >= 0 && parts.length > i + 3) {
+        return {
+          project: parts[i + 1] || this.selectedProject,
+          spider: parts[i + 2] || job.spider,
+          jobId: (parts[i + 3] || '').replace(/\.log$/i, '')
+        }
       }
+      return {
+        project: parts[2] || this.selectedProject,
+        spider: parts[3] || job.spider,
+        jobId: (parts[4] || '').replace(/\.log$/i, '')
+      }
+    },
+
+    /** 通过 WebSocket 增量查看日志（不再整文件新开窗口） */
+    openLog(job) {
+      if (!job || !job.log_url) {
+        this.$message.warning('该任务没有可用的日志链接')
+        return
+      }
+      this.currentLogJob = job
+      this.jobLogText = ''
+      this.jobLogTruncatedHint = ''
+      this.jobLogConnected = false
+      this.jobLogDialogVisible = true
+      this.$nextTick(() => this.initJobLogSocket(job))
+    },
+
+    onJobLogDialogClose() {
+      this.stopJobLogSocket()
+      this.currentLogJob = null
+    },
+
+    clearJobLogText() {
+      this.jobLogText = ''
+    },
+
+    appendJobLogChunk(chunk, opts = {}) {
+      const MAX = 600000
+      if (opts.reset) {
+        this.jobLogText = chunk || ''
+      } else {
+        this.jobLogText += chunk || ''
+      }
+      if (this.jobLogText.length > MAX) {
+        this.jobLogText = '…(已省略较早内容，保留最近约 600KB)…\n' + this.jobLogText.slice(-MAX)
+      }
+      this.$nextTick(() => {
+        const el = this.$refs.jobLogPre
+        if (el) el.scrollTop = el.scrollHeight
+      })
+    },
+
+    initJobLogSocket(job) {
+      this.stopJobLogSocket()
+      const { project, spider, jobId } = this.parseLogJobMeta(job)
+      if (!jobId) {
+        this.$message.error('无法从 log_url 解析 job_id')
+        return
+      }
+      const host = (this.scrapydHost || this.apiHost || '').replace(/\/$/, '')
+      if (!host) {
+        this.$message.error('未配置 Scrapyd 地址')
+        return
+      }
+
+      const socketUrl = this.resolveSocketBaseUrl()
+      try {
+        this.jobLogSocket = io(socketUrl, {
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: 8,
+          reconnectionDelay: 1000,
+          timeout: 15000,
+          forceNew: true
+        })
+
+        this.jobLogSocket.on('connect', () => {
+          this.jobLogConnected = true
+          this.jobLogSocket.emit('subscribe_job_log', {
+            host,
+            project,
+            spider,
+            job_id: jobId,
+            token: getToken()
+          })
+        })
+
+        this.jobLogSocket.on('disconnect', () => {
+          this.jobLogConnected = false
+        })
+
+        this.jobLogSocket.on('job_log_data', (data) => {
+          if (!data) return
+          if (data.error) {
+            // 轮询失败会反复推送，写入日志区避免 Message 刷屏
+            this.appendJobLogChunk(`\n[${new Date().toLocaleTimeString()}] ${data.error}\n`)
+            return
+          }
+          if (data.truncated) {
+            this.jobLogTruncatedHint = '首次仅加载日志文件末尾约 256KB，后续自动追加新内容'
+          }
+          if (data.chunk != null && data.chunk !== '') {
+            this.appendJobLogChunk(data.chunk, { reset: !!data.reset })
+          }
+        })
+
+        this.jobLogSocket.on('connect_error', (err) => {
+          this.$message.error('日志 WebSocket 连接失败: ' + (err && err.message ? err.message : String(err)))
+        })
+      } catch (e) {
+        this.$message.error((e && e.message) || '日志 WebSocket 初始化失败')
+      }
+    },
+
+    stopJobLogSocket() {
+      if (this.jobLogSocket) {
+        try {
+          this.jobLogSocket.emit('unsubscribe_job_log')
+        } catch (_) {}
+        this.jobLogSocket.disconnect()
+        this.jobLogSocket = null
+      }
+      this.jobLogConnected = false
     },
     
     // 修改方法：取消任务（原deleteJob方法）
@@ -589,14 +746,7 @@ export default {
         this.socket.disconnect()
       }
       
-      // 获取API基础地址
-      const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
-      let socketUrl = 'http://127.0.0.1:5001' // 默认地址
-
-      // 如果有API基础地址，使用它
-      if (API) {
-        socketUrl = API
-      }
+      const socketUrl = this.resolveSocketBaseUrl()
       
       try {
         console.log('尝试连接WebSocket:', socketUrl)
@@ -711,6 +861,7 @@ export default {
   // 组件销毁前断开WebSocket连接
   beforeUnmount() {
     this.disconnectWebSocket()
+    this.stopJobLogSocket()
   }
 }
 </script>
@@ -730,4 +881,18 @@ export default {
 .stat-card.gray   { background: linear-gradient(135deg, #909399, #b1b3b8); }
 .stat-val   { font-size: 26px; font-weight: 700; line-height: 1.2; }
 .stat-label { font-size: 12px; margin-top: 4px; opacity: 0.9; }
+
+.job-log-pre {
+  margin: 0;
+  padding: 12px;
+  max-height: 70vh;
+  overflow: auto;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-size: 12px;
+  line-height: 1.45;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
 </style>
