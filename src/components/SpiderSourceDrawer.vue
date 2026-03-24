@@ -23,6 +23,10 @@
         <div class="meta-bar">
           <el-tag size="small" type="info">{{ relPath || '—' }}</el-tag>
           <span v-if="byteSize != null" class="size-hint">{{ byteSize }} 字节</span>
+          <span v-if="!canSave" class="size-hint warn">只读：需管理员账号才可保存到服务器</span>
+          <el-button size="small" type="primary" :disabled="!canSave" :loading="saving" @click="saveToServer">
+            保存到服务器
+          </el-button>
           <el-button size="small" text type="primary" @click="reload" :loading="loading">重新加载</el-button>
           <el-button size="small" text @click="copyAll">复制全部</el-button>
         </div>
@@ -33,11 +37,10 @@
 </template>
 
 <script>
-import { EditorState } from '@codemirror/state'
 import { EditorView, basicSetup } from 'codemirror'
 import { python } from '@codemirror/lang-python'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
   name: 'SpiderSourceDrawer',
@@ -56,6 +59,8 @@ export default {
       relPath: '',
       byteSize: null,
       view: null,
+      canSave: true,
+      saving: false,
     }
   },
   computed: {
@@ -93,6 +98,8 @@ export default {
       this.hint = ''
       this.relPath = ''
       this.byteSize = null
+      this.canSave = true
+      this.saving = false
     },
 
     destroyEditor() {
@@ -109,6 +116,7 @@ export default {
       this.content = null
       this.relPath = ''
       this.byteSize = null
+      this.canSave = true
 
       const proj = this.project
       const sp = this.spider
@@ -129,6 +137,7 @@ export default {
         this.content = data.content ?? ''
         this.relPath = data.path || ''
         this.byteSize = data.size
+        this.canSave = data.can_save !== false
         await this.$nextTick()
         this.mountEditor(this.content)
       } catch (e) {
@@ -155,7 +164,6 @@ export default {
           basicSetup,
           python(),
           oneDark,
-          EditorState.readOnly.of(true),
           EditorView.lineWrapping,
           EditorView.theme({
             '&': { height: '100%' },
@@ -174,6 +182,53 @@ export default {
         ElMessage.success('已复制')
       } catch (_) {
         ElMessage.warning('复制失败')
+      }
+    },
+
+    async saveToServer() {
+      if (!this.canSave) {
+        ElMessage.warning('当前账号无保存权限')
+        return
+      }
+      const proj = this.project
+      const sp = this.spider
+      if (!proj || !sp) return
+      const text = this.view ? this.view.state.doc.toString() : this.content
+      if (text == null) return
+      try {
+        await ElMessageBox.confirm('将覆盖服务器上的该 .py 文件（若允许新建则可能创建文件）。是否继续？', '保存到服务器', {
+          type: 'warning',
+          confirmButtonText: '保存',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      this.saving = true
+      try {
+        const enc = (s) => encodeURIComponent(s)
+        const url = `${this.apiBase()}/scrapyd/projects/${enc(proj)}/spiders/${enc(sp)}/source`
+        const res = await this.authFetch()(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: text }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 403) {
+          ElMessage.error(data.message || '无保存权限（需管理员）')
+          return
+        }
+        if (!res.ok || data.status !== 'success') {
+          ElMessage.error(data.message || `保存失败 (${res.status})`)
+          return
+        }
+        this.relPath = data.path || this.relPath
+        this.byteSize = data.size != null ? data.size : new TextEncoder().encode(text).length
+        ElMessage.success(data.message || '已保存')
+      } catch (e) {
+        ElMessage.error(e.message || String(e))
+      } finally {
+        this.saving = false
       }
     },
   },
@@ -203,6 +258,9 @@ export default {
 .size-hint {
   font-size: 12px;
   color: #909399;
+}
+.size-hint.warn {
+  color: #e6a23c;
 }
 .editor-mount {
   border: 1px solid #3c3c3c;
