@@ -1,14 +1,14 @@
 <template>
   <div>
     <el-card>
-      <div slot="header" class="clearfix">
-        <span style="font-size: 18px; font-weight: bold;">爬虫项目管理</span>
-        <span style="float: right;">
-          <el-button style="margin-right: 8px;" type="success" @click="batchScrapydDeploy" :loading="deployLoading">
+      <div slot="header" class="clearfix card-header-row">
+        <span class="card-title">爬虫项目管理</span>
+        <span class="header-actions">
+          <el-button type="text" class="header-link header-link--deploy" @click="batchScrapydDeploy" :loading="deployLoading">
             拉取并批量部署
           </el-button>
-          <el-button style="padding: 8px 16px;" type="primary" @click="refreshProjects" :loading="loading">
-            <i class="el-icon-refresh"></i> 刷新项目
+          <el-button type="text" class="header-link" @click="refreshProjects" :loading="loading">
+            刷新项目
           </el-button>
         </span>
       </div>
@@ -29,78 +29,76 @@
           </div>
 
           <div v-else>
-            <el-button type="danger" size="small" @click="deleteProject(project.name)" style="margin-bottom:10px;">
-              Delete Project
-            </el-button>
-
-            <!-- 版本批量操作 -->
-            <div
-              v-if="project.versions && project.versions.length > 0"
-              style="margin: 8px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;"
-            >
-              <el-button
-                type="danger"
-                size="small"
-                :disabled="selectedVersionCount(project) === 0"
-                @click="batchDeleteSelectedVersions(project)"
-              >
-                批量删除选中版本
+            <div class="project-toolbar">
+              <el-button type="text" class="project-action project-action--danger" @click="deleteProject(project.name)">
+                删除项目
               </el-button>
-              <el-button type="warning" size="small" @click="pruneKeepLatest(project)">
-                仅保留最新版本
-              </el-button>
-              <span v-if="selectedVersionCount(project) > 0" style="color: #909399; font-size: 12px;">
-                已选 {{ selectedVersionCount(project) }} 个版本
-              </span>
+              <template v-if="project.versions && project.versions.length > 0">
+                <span class="toolbar-sep" aria-hidden="true">|</span>
+                <el-button
+                  type="text"
+                  class="project-action project-action--danger"
+                  :disabled="selectedVersionCount(project) === 0"
+                  @click="batchDeleteSelectedVersions(project)"
+                >
+                  批量删除选中版本
+                </el-button>
+                <el-button type="text" class="project-action project-action--warn" @click="pruneKeepLatest(project)">
+                  仅保留最新版本
+                </el-button>
+                <span v-if="selectedVersionCount(project) > 0" class="toolbar-hint">
+                  已选 {{ selectedVersionCount(project) }} 个版本
+                </span>
+              </template>
             </div>
 
             <!-- 添加版本表格 -->
             <el-table
               :data="project.versions"
               row-key="version"
-              style="width: 100%; margin-top: 15px;"
+              class="version-table"
+              style="width: 100%; margin-top: 12px;"
               v-if="project.versions && project.versions.length > 0"
               @selection-change="(rows) => onVersionSelectionChange(project.name, rows)"
+              size="small"
             >
-              <el-table-column type="selection" width="48" />
-              <el-table-column prop="version" label="Version" width="250">
+              <el-table-column type="selection" width="44" />
+              <el-table-column prop="version" label="版本" width="200">
                 <template #default="{ row }">
-                  <i class="el-icon-document" style="margin-right:5px;"></i>
-                  {{ row.version }}
+                  <span class="version-id">{{ row.version }}</span>
                 </template>
               </el-table-column>
-              
-              <el-table-column label="Spider List" width="120%">
+
+              <el-table-column label="爬虫列表" min-width="100">
                 <template #default="{ row }">
-                  <el-button 
-                    size="mini" 
-                    type="primary" 
+                  <el-button
+                    v-if="!row.spidersLoading"
+                    type="text"
+                    size="small"
+                    class="cell-text-btn"
                     @click="loadSpidersForVersion(project.name, row.version)"
-                    :loading="row.spidersLoading"
                   >
-                    Spiders List
+                    {{ row.spidersLoaded ? '重新加载' : '查看爬虫' }}
                   </el-button>
+                  <span v-else class="cell-muted">加载中…</span>
                 </template>
               </el-table-column>
-              
-              <!-- 新增Run Spider列 -->
-              <el-table-column label="Run Spider" align="center">
+
+              <el-table-column label="启动爬虫" min-width="280">
                 <template #default="{ row }">
-                  <div v-if="row.spiders && row.spiders.length > 0">
-                    <el-button
+                  <div v-if="row.spiders && row.spiders.length > 0" class="spider-link-list">
+                    <el-link
                       v-for="spider in row.spiders"
                       :key="spider"
-                      type="success"
-                      size="mini"
-                      style="margin: 2px;"
+                      type="primary"
+                      :underline="false"
+                      class="spider-link-item"
                       @click="runSpider(project.name, spider)"
                     >
-                      Run Spider({{ spider }})
-                    </el-button>
+                      {{ spider }}
+                    </el-link>
                   </div>
-                  <div v-else>
-                    <el-tag size="mini" type="info">No spiders available</el-tag>
-                  </div>
+                  <span v-else class="cell-muted">先点「查看爬虫」</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -674,5 +672,91 @@ export default {
 }
 .clearfix:after {
   clear: both;
+}
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.card-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.header-link {
+  padding: 4px 8px;
+  font-size: 14px;
+}
+.header-link--deploy {
+  color: #67c23a;
+}
+
+.project-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.project-action {
+  padding: 2px 8px;
+}
+.project-action--danger {
+  color: #f56c6c;
+}
+.project-action--warn {
+  color: #e6a23c;
+}
+.toolbar-sep {
+  color: #dcdfe6;
+  margin: 0 6px;
+  user-select: none;
+}
+.toolbar-hint {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.version-table :deep(.el-table__cell) {
+  vertical-align: top;
+}
+.version-id {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+.cell-text-btn {
+  padding: 0;
+  height: auto;
+  min-height: 0;
+}
+.cell-muted {
+  color: #909399;
+  font-size: 12px;
+}
+
+.spider-link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  line-height: 1.6;
+  max-width: 520px;
+  max-height: 168px;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+.spider-link-item {
+  font-size: 13px;
+}
+.spider-link-item:hover {
+  text-decoration: underline;
 }
 </style>
