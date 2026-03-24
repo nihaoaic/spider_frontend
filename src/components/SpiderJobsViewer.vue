@@ -136,6 +136,16 @@
                   </el-button>
                 </template>
               </el-table-column>
+              <el-table-column label="统计" width="88" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    size="mini"
+                    type="success"
+                    @click="analyzeJobLogLive(row)"
+                    :disabled="!row.log_url"
+                  >统计</el-button>
+                </template>
+              </el-table-column>
               <!-- 操作列 -->
               <el-table-column label="操作" width="100" align="center">
                 <template #default="{ row }">
@@ -264,11 +274,26 @@
 
     <!-- 日志分析对话框 -->
     <el-dialog
-      :title="`日志统计 — ${logAnalysisJob ? logAnalysisJob.spider : ''} (${logAnalysisJob ? logAnalysisJob.id : ''})`"
+      :title="logAnalysisDialogTitle"
       v-model="logAnalysisVisible"
       width="640px"
+      @close="onLogAnalysisDialogClose"
     >
       <div v-loading="logAnalysisLoading" element-loading-text="正在读取并解析日志...">
+        <div v-if="logAnalysisLiveMode" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <el-tag type="success" size="small">WebSocket · 服务端定时依次统计</el-tag>
+          <span v-if="logStatsSeq > 0" style="color:#606266;font-size:12px;">
+            第 {{ logStatsSeq }} 次 · {{ logStatsLastAt }}
+          </span>
+        </div>
+        <el-alert
+          v-if="logAnalysisLiveMode && logAnalysisStreamError"
+          :title="logAnalysisStreamError"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom:12px;"
+        />
         <div v-if="logAnalysisData" class="log-analysis">
           <!-- KPI 卡片 -->
           <el-row :gutter="12" style="margin-bottom:16px">
@@ -326,7 +351,13 @@
       </div>
       <template #footer>
         <el-button @click="logAnalysisVisible = false">关闭</el-button>
-        <el-button type="primary" @click="analyzeJobLog(logAnalysisJob)" :loading="logAnalysisLoading">刷新</el-button>
+        <el-button
+          v-if="!logAnalysisLiveMode && logAnalysisJob"
+          type="primary"
+          @click="analyzeJobLog(logAnalysisJob)"
+          :loading="logAnalysisLoading"
+        >刷新</el-button>
+        <span v-if="logAnalysisLiveMode" style="color:#909399;font-size:12px;margin-left:8px;">关闭窗口即停止推送</span>
       </template>
     </el-dialog>
 
@@ -374,6 +405,11 @@ export default {
       const s = this.currentLogJob.spider || ''
       const id = this.currentLogJob.id || ''
       return `实时日志 — ${s} (${id})`
+    },
+    logAnalysisDialogTitle() {
+      const j = this.logAnalysisJob
+      const base = j ? `${j.spider || ''} (${j.id || ''})` : ''
+      return this.logAnalysisLiveMode ? `实时统计 — ${base}` : `日志统计 — ${base}`
     }
   },
   data() {
@@ -398,6 +434,11 @@ export default {
       logAnalysisLoading: false,
       logAnalysisData: null,
       logAnalysisJob: null,
+      logAnalysisLiveMode: false,
+      logStatsSeq: 0,
+      logStatsLastAt: '',
+      logAnalysisStreamError: '',
+      jobStatsSocket: null,
       // 实时日志 WebSocket
       jobLogDialogVisible: false,
       jobLogText: '',
@@ -814,24 +855,32 @@ export default {
       }
     },
     
-    // 日志分析
+    onLogAnalysisDialogClose() {
+      if (this.logAnalysisLiveMode) {
+        this.stopJobStatsSocket()
+        this.logAnalysisLiveMode = false
+        this.logAnalysisStreamError = ''
+      }
+    },
+
+    /** 已完成任务：单次 HTTP 拉日志解析 */
     analyzeJobLog(job) {
       if (!job || !job.log_url) {
         this.$message.warning('该任务没有可用的日志')
         return
       }
+      this.stopJobStatsSocket()
+      this.logAnalysisLiveMode = false
+      this.logAnalysisStreamError = ''
       this.logAnalysisJob = job
       this.logAnalysisVisible = true
       this.logAnalysisLoading = true
       this.logAnalysisData = null
+      this.logStatsSeq = 0
+      this.logStatsLastAt = ''
 
-      // 解析 log_url 中的 spider 名（/logs/project/spider/jobid.log）
-      const parts = job.log_url.split('/')
-      const project = parts[2] || this.selectedProject
-      const spider  = parts[3] || job.spider
-      const jobId   = (parts[4] || '').replace('.log', '')
-
-      const host = this.scrapydHost || ''
+      const { project, spider, jobId } = this.parseLogJobMeta(job)
+      const host = this.scrapydHost || this.apiHost || ''
       const API  = (typeof window !== 'undefined' && window.__API_BASE__) || import.meta.env.VITE_API || ''
       const url  = `${API}/stats/job_logs?host=${encodeURIComponent(host)}&project=${encodeURIComponent(project)}&spider=${encodeURIComponent(spider)}&job_id=${encodeURIComponent(jobId)}`
 
@@ -848,6 +897,100 @@ export default {
         .finally(() => { this.logAnalysisLoading = false })
     },
 
+    /** 运行中任务：WebSocket 每 2s 依次推送解析结果 */
+    analyzeJobLogLive(job) {
+      if (!job || !job.log_url) {
+        this.$message.warning('该任务没有可用的日志')
+        return
+      }
+      this.stopJobStatsSocket()
+      this.logAnalysisJob = job
+      this.logAnalysisLiveMode = true
+      this.logAnalysisVisible = true
+      this.logAnalysisLoading = true
+      this.logAnalysisData = null
+      this.logStatsSeq = 0
+      this.logStatsLastAt = ''
+      this.logAnalysisStreamError = ''
+      this.$nextTick(() => this.initJobStatsSocket(job))
+    },
+
+    initJobStatsSocket(job) {
+      this.stopJobStatsSocket()
+      const { project, spider, jobId } = this.parseLogJobMeta(job)
+      if (!jobId) {
+        this.$message.error('无法从 log_url 解析 job_id')
+        this.logAnalysisLoading = false
+        return
+      }
+      const host = (this.scrapydHost || this.apiHost || '').replace(/\/$/, '')
+      if (!host) {
+        this.$message.error('未配置 Scrapyd 地址')
+        this.logAnalysisLoading = false
+        return
+      }
+
+      const socketUrl = this.resolveSocketBaseUrl()
+      try {
+        this.jobStatsSocket = io(socketUrl, {
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: 8,
+          reconnectionDelay: 1000,
+          timeout: 15000,
+          forceNew: true
+        })
+
+        this.jobStatsSocket.on('connect', () => {
+          this.jobStatsSocket.emit('subscribe_job_stats', {
+            host,
+            project,
+            spider,
+            job_id: jobId,
+            token: getToken()
+          })
+        })
+
+        this.jobStatsSocket.on('job_log_stats', (data) => {
+          if (!data) return
+          if (data.error) {
+            this.logAnalysisStreamError = data.error
+            this.logAnalysisLoading = false
+            if (data.seq != null) {
+              this.logStatsSeq = data.seq
+              this.logStatsLastAt = data.at ? new Date(data.at * 1000).toLocaleTimeString() : ''
+            }
+            return
+          }
+          this.logAnalysisStreamError = ''
+          if (data.analysis) {
+            this.logAnalysisData = data.analysis
+            this.logAnalysisLoading = false
+          }
+          if (data.seq != null) this.logStatsSeq = data.seq
+          if (data.at) this.logStatsLastAt = new Date(data.at * 1000).toLocaleTimeString()
+        })
+
+        this.jobStatsSocket.on('connect_error', (err) => {
+          this.logAnalysisLoading = false
+          this.logAnalysisStreamError = '连接失败: ' + (err && err.message ? err.message : String(err))
+        })
+      } catch (e) {
+        this.logAnalysisLoading = false
+        this.logAnalysisStreamError = (e && e.message) || '初始化失败'
+      }
+    },
+
+    stopJobStatsSocket() {
+      if (this.jobStatsSocket) {
+        try {
+          this.jobStatsSocket.emit('unsubscribe_job_stats')
+        } catch (_) {}
+        this.jobStatsSocket.disconnect()
+        this.jobStatsSocket = null
+      }
+    },
+
     // 断开WebSocket连接
     disconnectWebSocket() {
       if (this.socket) {
@@ -862,6 +1005,7 @@ export default {
   beforeUnmount() {
     this.disconnectWebSocket()
     this.stopJobLogSocket()
+    this.stopJobStatsSocket()
   }
 }
 </script>
