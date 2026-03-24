@@ -27,6 +27,11 @@
             <el-table :data="pendingJobs" style="width: 100%" v-loading="loading">
               <el-table-column prop="id" label="任务ID" width="300"></el-table-column>
               <el-table-column prop="spider" label="爬虫"></el-table-column>
+              <el-table-column label="源码" width="72" align="center">
+                <template #default="{ row }">
+                  <el-button size="mini" type="text" :disabled="!row.spider" @click="openSpiderSource(row)">源码</el-button>
+                </template>
+              </el-table-column>
               <!-- 新增名单列 -->
               <el-table-column prop="silks" label="名单" width="150">
                 <template #default="{ row }">
@@ -85,6 +90,11 @@
             <el-table :data="runningJobs" style="width: 100%" v-loading="loading">
               <el-table-column prop="id" label="任务ID" width="300"></el-table-column>
               <el-table-column prop="spider" label="爬虫"></el-table-column>
+              <el-table-column label="源码" width="72" align="center">
+                <template #default="{ row }">
+                  <el-button size="mini" type="text" :disabled="!row.spider" @click="openSpiderSource(row)">源码</el-button>
+                </template>
+              </el-table-column>
               <!-- 新增名单列 -->
               <el-table-column prop="silks" label="名单" width="150">
                 <template #default="{ row }">
@@ -165,6 +175,11 @@
             <el-table :data="finishedJobs" style="width: 100%" v-loading="loading">
               <el-table-column prop="id" label="任务ID" width="260"></el-table-column>
               <el-table-column prop="spider" label="爬虫"></el-table-column>
+              <el-table-column label="源码" width="64" align="center">
+                <template #default="{ row }">
+                  <el-button size="mini" type="text" :disabled="!row.spider" @click="openSpiderSource(row)">源码</el-button>
+                </template>
+              </el-table-column>
               <!-- 新增名单列 -->
               <el-table-column prop="silks" label="名单" width="100">
                 <template #default="{ row }">
@@ -381,15 +396,26 @@
         <el-button type="primary" @click="jobLogDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 线上爬虫 .py 源码（服务端磁盘，只读 CodeMirror） -->
+    <SpiderSourceDrawer
+      v-model="spiderSourceVisible"
+      :project="sourceDrawerProject"
+      :spider="sourceDrawerSpider"
+    />
   </div>
 </template>
 
 <script>
+import { defineAsyncComponent } from 'vue'
 import { io } from 'socket.io-client'
 import { getToken } from '../utils/auth.js'
 
+const SpiderSourceDrawer = defineAsyncComponent(() => import('./SpiderSourceDrawer.vue'))
+
 export default {
   name: 'SpiderJobsViewer',
+  components: { SpiderSourceDrawer },
   props: {
     apiHost: {
       type: String,
@@ -445,7 +471,10 @@ export default {
       jobLogSocket: null,
       jobLogConnected: false,
       jobLogTruncatedHint: '',
-      currentLogJob: null
+      currentLogJob: null,
+      spiderSourceVisible: false,
+      sourceDrawerProject: '',
+      sourceDrawerSpider: '',
     }
   },
   mounted() {
@@ -548,6 +577,21 @@ export default {
       }
     },
     
+    /** 从服务端读取当前项目下爬虫 .py（需配置 SPIDER_SOURCE_ROOT 等） */
+    openSpiderSource(row) {
+      if (!row || !row.spider) {
+        this.$message.warning('该任务没有爬虫名')
+        return
+      }
+      if (!this.selectedProject) {
+        this.$message.warning('请先选择项目')
+        return
+      }
+      this.sourceDrawerProject = this.selectedProject
+      this.sourceDrawerSpider = row.spider
+      this.spiderSourceVisible = true
+    },
+
     resolveSocketBaseUrl() {
       const API = typeof window !== 'undefined' && window.__API_BASE__ || import.meta.env.VITE_API || ''
       return API || 'http://127.0.0.1:5001'

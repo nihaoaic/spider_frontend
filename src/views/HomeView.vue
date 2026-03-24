@@ -22,9 +22,6 @@
         <el-menu-item index="mongo">
           <el-icon><Document /></el-icon>Mongo 脚本
         </el-menu-item>
-        <el-menu-item index="python-pad">
-          <el-icon><EditPen /></el-icon>Python 编辑
-        </el-menu-item>
         <el-menu-item index="files">
           <el-icon><FolderOpened /></el-icon>文件
         </el-menu-item>
@@ -93,7 +90,6 @@
         <div v-show="active === 'stats'" class="panel"><SpiderStats :api-host="selectedHost" /></div>
         <div v-show="active === 'redis'" class="panel"><RedisPush :api-host="selectedHost" /></div>
         <div v-show="active === 'mongo'" class="panel"><MongoExec :api-host="selectedHost" /></div>
-        <div v-if="active === 'python-pad'" class="panel"><PythonPad /></div>
         <div v-show="active === 'files'" class="panel"><FileList :api-host="selectedHost" /></div>
         <div v-show="active === 'tasks'" class="panel"><TaskList :api-host="selectedHost" /></div>
         <div v-show="active === 'spider-projects'" class="panel"><SpiderManager :api-host="selectedHost" /></div>
@@ -105,7 +101,6 @@
 </template>
 
 <script>
-import { defineAsyncComponent } from 'vue'
 import SpiderStats from '../components/SpiderStats.vue'
 import RedisPush from '../components/RedisPush.vue'
 import MongoExec from '../components/MongoExec.vue'
@@ -115,18 +110,16 @@ import SpiderManager from '../components/SpiderManager.vue'
 import SpiderJobsViewer from '../components/SpiderJobsViewer.vue'
 import SilkLogs from '../components/SilkLogs.vue'
 
-import { Menu, DataLine, Document, FolderOpened, List, SwitchButton, TrendCharts, Refresh, EditPen } from '@element-plus/icons-vue'
+import { Menu, DataLine, Document, FolderOpened, List, SwitchButton, TrendCharts, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUser, removeToken, isLoggedIn, authFetch } from '../utils/auth.js'
-
-const PythonPad = defineAsyncComponent(() => import('../components/PythonPad.vue'))
 
 export default {
   name: 'HomeView',
   components: {
     RedisPush, MongoExec, FileList, TaskList,
-    SpiderStats, SpiderManager, SpiderJobsViewer, SilkLogs, PythonPad,
-    Menu, DataLine, Document, FolderOpened, List, SwitchButton, TrendCharts, Refresh, EditPen,
+    SpiderStats, SpiderManager, SpiderJobsViewer, SilkLogs,
+    Menu, DataLine, Document, FolderOpened, List, SwitchButton, TrendCharts, Refresh,
   },
   data() {
     return {
@@ -142,7 +135,6 @@ export default {
         stats: '监控统计',
         redis: 'Redis 推送',
         mongo: 'Mongo 脚本执行',
-        'python-pad': 'Python 编辑',
         files: '文件列表',
         tasks: '查询任务',
         'spider-projects': '爬虫项目',
