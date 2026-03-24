@@ -4,16 +4,36 @@
     <div class="stats-toolbar">
       <span class="stats-title">爬虫监控统计</span>
       <div class="toolbar-right">
-        <el-select v-model="timeRange" size="small" style="width:120px;" @change="fetchAll">
+        <el-switch
+          v-model="liveStats"
+          size="small"
+          active-text="实时更新"
+          inactive-text="手动"
+          style="margin-right: 12px;"
+          @change="onLiveStatsToggle"
+        />
+        <span v-if="liveStats && statsLastPushAt" class="live-push-hint">
+          已推送 {{ statsLastPushAt }}<template v-if="statsWsSeq"> · #{{ statsWsSeq }}</template>
+        </span>
+        <el-select v-model="timeRange" size="small" style="width:120px;margin-left:8px;" @change="onTimeRangeChange">
           <el-option label="最近 7 天"  :value="7" />
           <el-option label="最近 14 天" :value="14" />
           <el-option label="最近 30 天" :value="30" />
         </el-select>
-        <el-button size="small" :loading="loading" @click="fetchAll" style="margin-left:8px;">
+        <el-button type="text" size="small" :loading="loading" @click="fetchAll" style="margin-left:8px;">
           <el-icon><Refresh /></el-icon> 刷新
         </el-button>
       </div>
     </div>
+
+    <el-alert
+      v-if="liveStats && statsWsError"
+      :title="statsWsError"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="stats-ws-alert"
+    />
 
     <div v-loading="loading">
       <!-- KPI 卡片 -->
@@ -85,7 +105,9 @@
 
 <script>
 import * as echarts from 'echarts'
+import { io } from 'socket.io-client'
 import { Refresh, InfoFilled } from '@element-plus/icons-vue'
+import { getToken } from '../utils/auth.js'
 
 const COLORS = {
   finished:  '#67C23A',
@@ -107,7 +129,18 @@ export default {
       overview: null,
       timeline: [],
       charts: {},
+      liveStats: true,
+      statsSocket: null,
+      statsLastPushAt: '',
+      statsWsSeq: 0,
+      statsWsError: '',
     }
+  },
+  watch: {
+    apiHost() {
+      this.fetchAll()
+      this.restartStatsWs()
+    },
   },
   computed: {
     kpiCards() {
@@ -123,11 +156,13 @@ export default {
       ]
     },
   },
-  mounted() {
-    this.fetchAll()
+  async mounted() {
+    await this.fetchAll()
+    if (this.liveStats) this.startStatsWs()
     window.addEventListener('resize', this.resizeCharts)
   },
   beforeUnmount() {
+    this.stopStatsWs()
     window.removeEventListener('resize', this.resizeCharts)
     Object.values(this.charts).forEach(c => c && c.dispose())
   },
@@ -138,6 +173,85 @@ export default {
     hostParam() {
       const h = this.apiHost || (typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__) || ''
       return h ? `?host=${encodeURIComponent(h)}` : ''
+    },
+
+    scrapydHostForWs() {
+      return this.apiHost || (typeof window !== 'undefined' && window.__SCRAPYD_SELECTED_HOST__) || ''
+    },
+
+    onTimeRangeChange() {
+      this.fetchAll()
+      this.restartStatsWs()
+    },
+
+    onLiveStatsToggle() {
+      if (this.liveStats) this.startStatsWs()
+      else this.stopStatsWs()
+    },
+
+    stopStatsWs() {
+      if (this.statsSocket) {
+        try {
+          this.statsSocket.emit('unsubscribe_spider_stats')
+        } catch (_) {}
+        this.statsSocket.disconnect()
+        this.statsSocket = null
+      }
+      this.statsWsError = ''
+    },
+
+    restartStatsWs() {
+      if (!this.liveStats) return
+      this.stopStatsWs()
+      this.startStatsWs()
+    },
+
+    startStatsWs() {
+      if (!this.liveStats) return
+      this.stopStatsWs()
+      const base = this.base() || 'http://127.0.0.1:5001'
+      try {
+        this.statsSocket = io(base, {
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 2000,
+          timeout: 15000,
+          forceNew: true,
+        })
+        const sub = () => {
+          this.statsSocket.emit('subscribe_spider_stats', {
+            host: this.scrapydHostForWs(),
+            days: this.timeRange,
+            token: getToken(),
+          })
+        }
+        this.statsSocket.on('connect', sub)
+        this.statsSocket.on('reconnect', sub)
+        this.statsSocket.on('spider_stats_data', (data) => this.applyStatsPayload(data))
+        this.statsSocket.on('connect_error', (err) => {
+          this.statsWsError = (err && err.message) || 'WebSocket 连接失败'
+        })
+      } catch (e) {
+        this.statsWsError = (e && e.message) || 'WebSocket 初始化失败'
+      }
+    },
+
+    applyStatsPayload(data) {
+      if (!data) return
+      if (data.error) {
+        this.statsWsError = data.error
+        if (data.seq != null) this.statsWsSeq = data.seq
+        return
+      }
+      this.statsWsError = ''
+      this.overview = data.overview
+      this._spiderCounts = data.spider_counts || []
+      this._projectCounts = data.project_counts || []
+      this.timeline = data.timeline || []
+      if (data.seq != null) this.statsWsSeq = data.seq
+      if (data.at) this.statsLastPushAt = new Date(data.at * 1000).toLocaleTimeString()
+      this.$nextTick(() => this.renderAll())
     },
 
     async fetchAll() {
@@ -176,18 +290,17 @@ export default {
       this.renderBarProj()
     },
 
-    getChart(refName) {
+    /** 复用 ECharts 实例，避免实时推送时反复 dispose 闪烁 */
+    ensureChart(refName) {
       const el = this.$refs[refName]
       if (!el) return null
-      if (this.charts[refName]) {
-        this.charts[refName].dispose()
-      }
+      if (this.charts[refName]) return this.charts[refName]
       this.charts[refName] = echarts.init(el)
       return this.charts[refName]
     },
 
     renderPie() {
-      const chart = this.getChart('pieRef')
+      const chart = this.ensureChart('pieRef')
       if (!chart || !this.overview) return
       const o = this.overview
       chart.setOption({
@@ -209,7 +322,7 @@ export default {
     },
 
     renderBarSpider() {
-      const chart = this.getChart('barSpiderRef')
+      const chart = this.ensureChart('barSpiderRef')
       if (!chart) return
       const data = (this._spiderCounts || []).slice(0, 10)
       const names = data.map(d => d.name)
@@ -238,7 +351,7 @@ export default {
     },
 
     renderBarItem() {
-      const chart = this.getChart('barItemRef')
+      const chart = this.ensureChart('barItemRef')
       if (!chart) return
       const data = (this._spiderCounts || []).slice(0, 10)
       const names = data.map(d => d.name)
@@ -269,7 +382,7 @@ export default {
     },
 
     renderLine() {
-      const chart = this.getChart('lineRef')
+      const chart = this.ensureChart('lineRef')
       if (!chart) return
       const dates       = this.timeline.map(d => d.date.slice(5))
       const finished    = this.timeline.map(d => d.finished)
@@ -315,7 +428,7 @@ export default {
     },
 
     renderBarProj() {
-      const chart = this.getChart('barProjRef')
+      const chart = this.ensureChart('barProjRef')
       if (!chart) return
       const data = (this._projectCounts || []).slice(0, 10)
       const names = data.map(d => d.name)
@@ -357,7 +470,9 @@ export default {
   margin-bottom: 16px;
 }
 .stats-title { font-size: 16px; font-weight: 600; color: #303133; }
-.toolbar-right { display: flex; align-items: center; }
+.toolbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; }
+.live-push-hint { font-size: 12px; color: #67c23a; margin-right: 4px; }
+.stats-ws-alert { margin-bottom: 12px; }
 
 .kpi-row { margin-bottom: 4px; }
 .kpi-card {
