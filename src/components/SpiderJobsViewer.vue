@@ -539,7 +539,23 @@ export default {
           if (data.status === 'success') {
             // 保存host信息
             this.scrapydHost = data.host || ''
-            const jobs = data.data || []
+            const effectiveHost = data.host || ''
+            const project = this.selectedProject
+            const jobs = (data.data || []).map(job => {
+              // 补全 log_url，让日志/统计按钮可用
+              if (!job.log_url) {
+                const spider = job.spider || ''
+                const jid = job.id || ''
+                if (effectiveHost === 'local') {
+                  // 本地模式：构造 local://logs/... 格式供 parseLogJobMeta 解析
+                  job.log_url = `local://logs/${project}/${spider}/${jid}.log`
+                } else if (effectiveHost) {
+                  // Scrapyd 模式：标准日志 URL
+                  job.log_url = `${effectiveHost.replace(/\/$/, '')}/logs/${project}/${spider}/${jid}.log`
+                }
+              }
+              return job
+            })
             
             // 根据status分类任务
             this.pendingJobs = jobs.filter(job => job.status === 'pending')
