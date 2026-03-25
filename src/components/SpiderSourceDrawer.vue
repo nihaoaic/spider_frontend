@@ -21,14 +21,17 @@
       <div v-if="error" class="err-text">{{ error }}</div>
       <template v-else-if="content !== null">
         <div class="meta-bar">
-          <el-tag size="small" type="info">{{ relPath || '—' }}</el-tag>
-          <span v-if="byteSize != null" class="size-hint">{{ byteSize }} 字节</span>
-          <span v-if="!canSave" class="size-hint warn">只读：需管理员账号才可保存到服务器</span>
+          <el-tag size="small" type="info">{{ relPath || '?' }}</el-tag>
+          <span v-if="byteSize != null" class="size-hint">{{ byteSize }} ??</span>
+          <span v-if="!canSave" class="size-hint warn">?????????????????</span>
           <el-button size="small" type="primary" :disabled="!canSave" :loading="saving" @click="saveToServer">
-            保存到服务器
+            ??????
           </el-button>
-          <el-button size="small" text type="primary" @click="reload" :loading="loading">重新加载</el-button>
-          <el-button size="small" text @click="copyAll">复制全部</el-button>
+          <el-button size="small" type="success" :disabled="running" :loading="running" @click="runPreview">
+            ???????
+          </el-button>
+          <el-button size="small" text type="primary" @click="reload" :loading="loading">????</el-button>
+          <el-button size="small" text @click="copyAll">????</el-button>
         </div>
         <div ref="editorMount" class="editor-mount" />
       </template>
@@ -61,14 +64,15 @@ export default {
       view: null,
       canSave: true,
       saving: false,
+      running: false,
+      lastJobId: '',
     }
   },
   computed: {
     drawerTitle() {
-      if (!this.spider) return '爬虫源码'
-      return `源码 — ${this.spider}`
+      if (!this.spider) return '????'
+      return `?? ? ${this.spider}`
     },
-    /** 合并监听，避免打开时多次请求 */
     loadKey() {
       return this.modelValue ? `${this.project}\0${this.spider}` : ''
     },
@@ -129,9 +133,9 @@ export default {
         const res = await this.authFetch()(url)
         const data = await res.json().catch(() => ({}))
         if (!res.ok || data.status !== 'success') {
-          this.error = data.message || `加载失败 (${res.status})`
+          this.error = data.message || `???? (${res.status})`
           this.hint =
-            '服务端需在磁盘上能访问到爬虫 .py：配置 SPIDER_SOURCE_ROOT，或使用 SCRAPYD_DEPLOY_WORKDIR / PULL_SPIDER_REPO_PATH 指向含 spiders/ 的目录。'
+            '?????????????? .py??? SPIDER_SOURCE_ROOT???? SCRAPYD_DEPLOY_WORKDIR / PULL_SPIDER_REPO_PATH ??? spiders/ ????'
           return
         }
         this.content = data.content ?? ''
@@ -143,7 +147,7 @@ export default {
       } catch (e) {
         this.error = e.message || String(e)
         this.hint =
-          '请确认已登录且后端已配置源码目录；本功能从服务器文件系统读取，不从 Scrapyd egg 解压。'
+          '????????????????????????????????? Scrapyd egg ???'
       } finally {
         this.loading = false
       }
@@ -179,15 +183,62 @@ export default {
       if (text == null) return
       try {
         await navigator.clipboard.writeText(text)
-        ElMessage.success('已复制')
+        ElMessage.success('???')
       } catch (_) {
-        ElMessage.warning('复制失败')
+        ElMessage.warning('????')
+      }
+    },
+
+    /** ??????????????????????????????? */
+    async runPreview() {
+      const proj = this.project
+      const sp = this.spider
+      if (!proj || !sp) return
+      const text = this.view ? this.view.state.doc.toString() : this.content
+      if (text == null) return
+
+      try {
+        await ElMessageBox.confirm(
+          '????????????????????????????????????????????????',
+          '???????',
+          { type: 'info', confirmButtonText: '??', cancelButtonText: '??' }
+        )
+      } catch { return }
+
+      this.running = true
+      try {
+        const enc = (s) => encodeURIComponent(s)
+        const base = this.apiBase()
+        const res = await this.authFetch()(
+          `${base}/scrapyd/projects/${enc(proj)}/spiders/${enc(sp)}/run_preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          }
+        )
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || data.status !== 'success') {
+          ElMessage.error(data.message || `???? (${res.status})`)
+          return
+        }
+        this.lastJobId = data.jobid || ''
+        ElMessage({
+          type: 'success',
+          duration: 6000,
+          showClose: true,
+          message: `????? ?  JobID: ${this.lastJobId}??????????????`,
+        })
+      } catch (e) {
+        ElMessage.error(e.message || String(e))
+      } finally {
+        this.running = false
       }
     },
 
     async saveToServer() {
       if (!this.canSave) {
-        ElMessage.warning('当前账号无保存权限')
+        ElMessage.warning('?????????')
         return
       }
       const proj = this.project
@@ -196,10 +247,10 @@ export default {
       const text = this.view ? this.view.state.doc.toString() : this.content
       if (text == null) return
       try {
-        await ElMessageBox.confirm('将覆盖服务器上的该 .py 文件（若允许新建则可能创建文件）。是否继续？', '保存到服务器', {
+        await ElMessageBox.confirm('????????? .py ??????????????????????', '??????', {
           type: 'warning',
-          confirmButtonText: '保存',
-          cancelButtonText: '取消',
+          confirmButtonText: '??',
+          cancelButtonText: '??',
         })
       } catch {
         return
@@ -215,16 +266,16 @@ export default {
         })
         const data = await res.json().catch(() => ({}))
         if (res.status === 403) {
-          ElMessage.error(data.message || '无保存权限（需管理员）')
+          ElMessage.error(data.message || '???????????')
           return
         }
         if (!res.ok || data.status !== 'success') {
-          ElMessage.error(data.message || `保存失败 (${res.status})`)
+          ElMessage.error(data.message || `???? (${res.status})`)
           return
         }
         this.relPath = data.path || this.relPath
         this.byteSize = data.size != null ? data.size : new TextEncoder().encode(text).length
-        ElMessage.success(data.message || '已保存')
+        ElMessage.success(data.message || '???')
       } catch (e) {
         ElMessage.error(e.message || String(e))
       } finally {
