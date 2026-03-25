@@ -174,7 +174,7 @@ export default {
         .then(data => {
           if (data.status === 'success') {
             // 修复：根据后端实际返回结构解析项目列表数据
-            const projectNames = data.data.projects || []
+            const projectNames = Array.isArray(data.data) ? data.data : (data.data.projects || [])
             // 初始化项目数据
             this.versionSelectionByProject = {}
             this.projects = projectNames.map(name => ({ 
