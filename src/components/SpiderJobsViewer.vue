@@ -496,7 +496,7 @@ export default {
         })
         .then(data => {
           if (data.status === 'success') {
-            this.projects = data.data.projects || []
+            this.projects = Array.isArray(data.data) ? data.data : (data.data.projects || [])
             if (this.projects.length > 0 && !this.selectedProject) {
               this.selectedProject = this.projects[0]
               this.refreshJobs()
